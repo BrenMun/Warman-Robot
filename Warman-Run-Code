@@ -1,0 +1,121 @@
+
+#include <Arduino.h>
+#include <Stepper.h>
+
+//Steps per revolution and scaling for degress
+const int stepsPerRevolution  = 200;
+
+/************************************DRIVE*VARIABLES**********************************************/
+//Wheel direction pins (PRIORITISE FOR PWM)
+const int drivePins[] = {5,9,6,3};  //LF,LB,RF,RB
+
+//Fine tuned PWM values for each side (based on how straight it initially drives)
+int leftPWM = 255;
+int rightPWM = 255;
+
+/************************************POINT*VARIABLES**********************************************/
+//Solenoid Latch Release
+int latch = 1;
+//Angles to get to each posistion starting at equilibrium (measured in solidworks)
+const float equilibrium2pipeC = -70.11;
+const float pipeC2pipeB = 93.88;
+const float pipeB2pipeD = 198.32;
+
+//Degrees converted to steps (rounded to the nearest unit). backlog: fix repetitive lines
+double PointC = round(equilibrium2pipeC*200/360);
+double PointB = round(pipeC2pipeB*200/360);
+double PointD = round(pipeB2pipeD*200/360);
+
+// stepper library pins (IN1, IN2, IN3, IN4)
+Stepper baseStepper(stepsPerRevolution, 2, 4, 7, 12);
+
+/************************************UNLOAD*VARIABLES*********************************************/
+//There are 10 evenly spaced chambers for each payload. 
+//Therefore the device needs to rotate 20 steps (36 degrees) to unload each ball
+int rotate = 20;
+
+//Number of payloads for each pipe
+int payloadC = 3;
+int payloadB = 2;
+int payloadD = 4;
+
+// initialize the stepper library on pins 8 through 11:
+Stepper storageStepper(stepsPerRevolution, 8, 9, 10, 11);
+
+/*************************************************************************************************/
+
+void setup() 
+{ 
+  Serial.begin(9600);                                         
+  
+  //pinMode output for driving wheels
+  for(int i=0; i<4; i++) pinMode(drivePins[i],OUTPUT);
+  
+  //set speed (RPM) of steppers
+  storageStepper.setSpeed(60);
+  baseStepper.setSpeed(30);
+}
+
+//Drive forward
+void forward ()
+{
+  int frontWrite[] = {leftPWM,0,rightPWM,0};
+  for(int i=0; i<4; i++) analogWrite(drivePins[i],frontWrite[i]);
+  Serial.println("Driving to Position...");
+  delay(5000);
+}
+
+//Solenoid Latch Release
+void latchRelease()
+{
+  pinMode(latch,OUTPUT);
+  digitalWrite(latch,HIGH);
+}
+
+//Point the stepper to a pipe
+void Point(int steps)   //angle converted to steps
+{
+  baseStepper.step(steps);
+  Serial.print("Rotating: ");
+  Serial.print(steps);
+  Serial.println(" Steps");
+  delay(2000);
+}
+
+//Unload a number of payloads to arm
+void unload(int payload)
+{
+  int unloadSteps = rotate * payload;
+  storageStepper.step(unloadSteps);
+  Serial.print("Unloading: ");
+  Serial.print(payload);
+  Serial.print(" Payloads, Steps Taken: ");
+  Serial.println(unloadSteps);
+  delay(2000);
+}
+
+//Drive backward
+void backward ()
+{
+  int backWrite[] = {0,leftPWM,0,rightPWM};
+  for(int i=0; i<4; i++) analogWrite(drivePins[i],backWrite[i]);
+  Serial.println("Driving back to StartPosition...");
+  delay(5000);
+}
+
+void loop() 
+{
+  forward();          //robot drives forward for a duration
+  latchRelease();     //HIGH signal sent to latch - releases arm
+  
+  Point(PointC);      //Base points to C
+  unload(payloadC);   //3 payloads ejected from storage
+
+  Point(PointB);      //Base points to B
+  unload(payloadB);   //2 payloads ejected
+
+  Point(PointD);      //Base points to D
+  unload(payloadD);   //4 payloads ejected
+  
+  backward();         //robot drives back to start 
+}
