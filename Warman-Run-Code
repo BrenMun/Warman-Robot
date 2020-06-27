@@ -70,6 +70,7 @@ void latchRelease()
 {
   pinMode(latch,OUTPUT);
   digitalWrite(latch,HIGH);
+  Serial.println("Arm Released")
 }
 
 //Point the stepper to a pipe
